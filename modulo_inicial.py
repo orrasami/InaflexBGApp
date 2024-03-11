@@ -19,8 +19,8 @@ class Background:
         daemon.start()
 
     def background_task(self):
-        schedule.every().day.at("18:00").do(self.tarefas)
-        # schedule.every(2).seconds.do(self.tarefas)
+        # schedule.every().day.at("18:00").do(self.tarefas)
+        schedule.every(1).seconds.do(self.tarefas)
         while True:
             schedule.run_pending()
             time.sleep(1)
@@ -32,6 +32,7 @@ class Background:
         self.email_pedido_no_faturamento_sem_informacao()
         self.email_pedido_no_faturamento()
         self.email_pedido_para_entrega()
+        self.email_eventos_parado_vendas()
 
         respostas = BDBohm().powerbi_orcamentos()
         self.cria_relatorio_orcamentos(respostas, 0)
@@ -340,6 +341,59 @@ class Background:
         connection.login(username, password)
         connection.send_message(mimemsg)
         connection.quit()
+
+    @staticmethod
+    def email_eventos_parado_vendas():
+        resultados = BDWorkflow().email_eventos_parado_vendas_db()
+
+        count = 0
+        while count < 2:
+            conteudo = False
+
+            mail_body = "<h3>Eventos atrasados</h3><br>"
+            mail_body += ('<table style="border:1px solid black; border-collapse: collapse;">'
+                         ' <tr>'
+                         '  <td style="border:1px solid black; padding: 10px;"># EVENTO</td>'
+                         '  <td style="border:1px solid black; padding: 10px;">USUÁRIO</td>'
+                         '  <td style="border:1px solid black; padding: 10px;">TIPO DE EVENTO</td>'
+                         '  <td style="border:1px solid black; padding: 10px;">ULTIMA ATUALIZAÇÃO</td>'
+                         ' </tr>')
+
+            for resultado in resultados:
+                if count == 0 or (resultado["tipoEvento"] == "GERAR PEDIDO" or resultado["tipoEvento"] == "FAZER ORCAMENTO"):
+                    conteudo = True
+                    data = resultado['logUltimo']
+                    data = data.strftime("%d/%m/%Y")
+                    mail_body += f'<tr>'
+                    mail_body += f'<td style="border:1px solid black; padding: 10px;">{resultado["id"]}</td>'
+                    mail_body += f'<td style="border:1px solid black; padding: 10px;">{resultado["usuario"]}</td>'
+                    mail_body += f'<td style="border:1px solid black; padding: 10px;">{resultado["tipoEvento"]}</td>'
+                    mail_body += f'<td style="border:1px solid black; padding: 10px;">{data}</td>'
+                    mail_body += f'</tr>'
+
+            mail_body += f'</table>'
+
+            username = "sami@inaflex.com.br"
+            password = "Inf_Rav#M365_2023"
+            mail_from = "sami@inaflex.com.br"
+            if count == 0:
+                mail_to = "sami@inaflex.com.br"
+            else:
+                mail_to = "felipe.orra@inaflex.com.br"
+            mail_subject = "Eventos parados a mais de dois dias"
+
+            if conteudo:
+                mimemsg = MIMEMultipart()
+                mimemsg['From'] = mail_from
+                mimemsg['To'] = mail_to
+                mimemsg['Subject'] = mail_subject
+                mimemsg.attach(MIMEText(mail_body, 'html'))
+                connection = smtplib.SMTP(host='smtp.office365.com', port=587)
+                connection.starttls()
+                connection.login(username, password)
+                connection.send_message(mimemsg)
+                connection.quit()
+                count += 1
 
     @staticmethod
     def email_eventos_pendentes():

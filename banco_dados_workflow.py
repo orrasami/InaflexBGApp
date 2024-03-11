@@ -1,5 +1,6 @@
 import pymysql.cursors
 from datetime import datetime, timedelta
+import pandas as pd
 
 
 class BDWorkflow:
@@ -34,6 +35,19 @@ class BDWorkflow:
         tomorrow = (datetime.now() + timedelta(days=1)).date()
         consulta = f"SELECT pedido, cliente, cnpj, data_entrega FROM pedidos " \
                    f"WHERE entregas = '1' AND finalizado = '0' AND data_entrega <= '{tomorrow}'"
+        self.cursor.execute(consulta)
+        self.conn.commit()
+        resultados = self.cursor.fetchall()
+        return resultados
+
+    def email_eventos_parado_vendas_db(self):
+        num_business_days = 2
+        today = pd.to_datetime(datetime.now())  # Replace with your actual date
+        data_ref = today - pd.tseries.offsets.CustomBusinessDay(num_business_days)
+
+        # data_ref = (datetime.now() - timedelta(days=2)).date()
+        consulta = f"SELECT id, tipoEvento, usuario, logUltimo FROM eventos " \
+                   f"WHERE estagio < 90 AND ativo = 1 AND logUltimo <= '{data_ref}' ORDER BY tipoEvento"
         self.cursor.execute(consulta)
         self.conn.commit()
         resultados = self.cursor.fetchall()
